@@ -643,8 +643,7 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
         <div id="proc-3-specs" class="proc-content active">
           <div class="proc-title">Connecting Rod Bearing Specifications — Manual 3666206</div>
           <div class="spec-grid">
-            <div class="spec-card primary"><div class="spec-label">Bearing Shell Thickness — MIN</div><div class="spec-value">0.096<span class="spec-unit">in</span></div><div class="spec-sub">2.43 mm</div></div>
-            <div class="spec-card primary"><div class="spec-label">Bearing Shell Thickness — MAX</div><div class="spec-value">0.097<span class="spec-unit">in</span></div><div class="spec-sub">2.46 mm</div></div>
+            <div class="spec-card"><div class="spec-label">New Bearing Shell Thickness</div><div class="spec-value" style="font-size:16px;">Record as-built</div><div class="spec-sub">New bearings installed every overhaul — record actual thickness for reference</div></div>
             <div class="spec-card"><div class="spec-label">Con Rod Side Clearance — MIN</div><div class="spec-value">0.004<span class="spec-unit">in</span></div><div class="spec-sub">0.10 mm</div></div>
             <div class="spec-card"><div class="spec-label">Con Rod Side Clearance — MAX</div><div class="spec-value">0.013<span class="spec-unit">in</span></div><div class="spec-sub">0.33 mm</div></div>
             <div class="spec-card danger"><div class="spec-label">Max Con Rod Bearing Clearance</div><div class="spec-value">0.0046<span class="spec-unit">in</span></div><div class="spec-sub">0.117 mm · Bore ID w/ shell − journal OD</div></div>
@@ -682,7 +681,7 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
             <li>Before removal, mark each bearing shell with L (lower) or U (upper) and the journal number. Verify serial numbers on rod and cap match.</li>
             <li>Clean cap, capscrews, and bearings with solvent and soft bristle brush. Use Scotch-Brite 7448 on seating surfaces. Do NOT use wire brush on bearings.</li>
             <li>Inspect bearing shells for pitting, flaking, corrosion, lock tang damage, or deep scratches. Replace as a set if any damage found.</li>
-            <li>Measure bearing shell thickness. MIN: 2.43 mm [0.096 in]. Discard if below minimum.</li>
+            <li>Install NEW bearing shells (std or undersize to match journal). Record the new bearing thickness for reference.</li>
             <li>Lubricate bearing shells with clean engine oil before installation.</li>
             <li>Install bearing shells. Ensure locking tang seats in notch of rod and cap.</li>
             <li>Install rod cap — ensure cap number matches rod number and cap faces camshaft side.</li>
@@ -1367,12 +1366,12 @@ const sec2Meas=[
 
 // ══ SECTION 3 — CON ROD BEARINGS ══
 const sec3Meas=[
-  {id:'s3-rod-b1',   label:'Con Rod Bearing Thickness #1',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 1', group:'Bearing Shell Thickness'},
-  {id:'s3-rod-b2',   label:'Con Rod Bearing Thickness #2',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 2', group:null},
-  {id:'s3-rod-b3',   label:'Con Rod Bearing Thickness #3',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 3', group:null},
-  {id:'s3-rod-b4',   label:'Con Rod Bearing Thickness #4',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 4', group:null},
-  {id:'s3-rod-b5',   label:'Con Rod Bearing Thickness #5',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 5', group:null},
-  {id:'s3-rod-b6',   label:'Con Rod Bearing Thickness #6',   spec:'0.096–0.097"', min:0.096, max:0.097, loc:'Rod 6', group:null},
+  {id:'s3-rod-b1',   label:'New Con Rod Bearing Thickness #1', spec:'Record thickness', min:null, max:null, loc:'Rod 1', group:'New Bearing Shell Thickness (record only)'},
+  {id:'s3-rod-b2',   label:'New Con Rod Bearing Thickness #2', spec:'Record thickness', min:null, max:null, loc:'Rod 2', group:null},
+  {id:'s3-rod-b3',   label:'New Con Rod Bearing Thickness #3', spec:'Record thickness', min:null, max:null, loc:'Rod 3', group:null},
+  {id:'s3-rod-b4',   label:'New Con Rod Bearing Thickness #4', spec:'Record thickness', min:null, max:null, loc:'Rod 4', group:null},
+  {id:'s3-rod-b5',   label:'New Con Rod Bearing Thickness #5', spec:'Record thickness', min:null, max:null, loc:'Rod 5', group:null},
+  {id:'s3-rod-b6',   label:'New Con Rod Bearing Thickness #6', spec:'Record thickness', min:null, max:null, loc:'Rod 6', group:null},
   // Dial Bore Gauge — Rod bore ID with shell installed (caps torqued)
   {id:'s3-bore-1',   label:'Con Rod Bore ID w/ Shell — #1',  spec:'Record bore ID', min:null,  max:null,  loc:'Rod 1', group:'Bore ID — Dial Bore Gauge (Shell Installed, Caps Torqued)'},
   {id:'s3-bore-2',   label:'Con Rod Bore ID w/ Shell — #2',  spec:'Record bore ID', min:null,  max:null,  loc:'Rod 2', group:null},
