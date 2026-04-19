@@ -2474,15 +2474,18 @@ function injectJobUI() {
 
 // ── Supabase fetch helpers ──
 async function sbFetch(path, options={}) {
+  // Merge caller's options FIRST, then set our headers explicitly — so
+  // the spread doesn't overwrite apikey/Authorization/Content-Type.
+  const { headers: callerHeaders = {}, ...rest } = options;
   const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    ...rest,
     headers: {
       'apikey': SUPABASE_KEY,
       'Authorization': 'Bearer ' + SUPABASE_KEY,
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates',
-      ...( options.headers || {})
-    },
-    ...options
+      ...callerHeaders
+    }
   });
   return res;
 }
