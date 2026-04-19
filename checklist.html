@@ -2516,10 +2516,10 @@ async function syncToCloud(jobId, state) {
     rows.push({ job_id: jobId, field_id, field_value: String(field_value), updated_at: now });
   });
 
-  // Upsert in batches of 100
+  // Upsert in batches of 100 — on_conflict tells PostgREST which unique key to merge against
   for (let i = 0; i < rows.length; i += 100) {
     const batch = rows.slice(i, i + 100);
-    await sbFetch(TABLE, {
+    await sbFetch(TABLE + '?on_conflict=job_id,field_id', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify(batch)
