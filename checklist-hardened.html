@@ -1284,6 +1284,70 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
 <script>
 const PASS_C='#065F46', FAIL_C='#991B1B', GOLD='#D97706';
 
+// ── Job ID UI (injected into header) ──
+function injectJobUI() {
+  const header = document.querySelector('.header-inner');
+  if (!header) return;
+  const jobDiv = document.createElement('div');
+  jobDiv.className = 'header-job';
+  jobDiv.innerHTML = `
+    <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,0.6);">JOB #</label>
+    <input id="job-id-input" type="text" placeholder="e.g. TSI-2025-001"
+      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;max-width:45vw;">
+    <button onclick="loadJob()" style="background:var(--gold);color:var(--navy);border:none;border-radius:5px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">LOAD</button>
+    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.5);font-family:'Barlow',sans-serif;flex-basis:100%;text-align:center;"></span>
+  `;
+  header.insertBefore(jobDiv, header.firstChild);
+  const lastJob = localStorage.getItem('tsi_last_job_id');
+  if (lastJob) {
+    const el = document.getElementById('job-id-input');
+    if (el) el.value = lastJob;
+  }
+}
+
+// ── Wire every input to trigger debounced autosave ──
+function attachAutoSaveListeners() {
+  const handler = () => { if (typeof autoSave === 'function') autoSave(); };
+  document.querySelectorAll('input, select, textarea').forEach(el => {
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+  // Pass/Fail buttons use classList changes — catch those via delegation
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.id && (t.id.startsWith('pass-') || t.id.startsWith('fail-'))) {
+      setTimeout(handler, 0);
+    }
+  });
+}
+
+// ── Check for unsaved local backup on startup ──
+function checkRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const banner = document.getElementById('restore-banner');
+    if (banner) banner.style.display = 'flex';
+  } catch(e) { /* ignore */ }
+}
+
+function doRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (typeof restoreState === 'function') restoreState(state);
+  } catch(e) { console.error('Restore failed', e); }
+  dismissRestore();
+}
+
+function dismissRestore() {
+  const banner = document.getElementById('restore-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+
 // ══ SECTION 1 — CRANKSHAFT ══
 const sec1Meas=[
   // Con Rod Journal Diameters
