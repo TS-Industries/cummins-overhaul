@@ -2410,6 +2410,8 @@ function openLightbox_report(src){
 
 // ══ STATE COLLECT / RESTORE / AUTO-SAVE (required by init) ══
 
+let _isRestoring = false;   // true while we're rehydrating the form; blocks autoSave feedback loops
+
 // Gather the full form state into a plain object.
 function collectState() {
   const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{} };
@@ -2471,6 +2473,8 @@ function collectState() {
 // Apply a loaded state back onto the form.
 function restoreState(state) {
   if (!state) return;
+  _isRestoring = true;
+  try {
 
   // Meta
   Object.entries(state.meta || {}).forEach(([k,v]) => {
@@ -2478,12 +2482,25 @@ function restoreState(state) {
     if (el) el.value = v || '';
   });
 
-  // Measurements
+  // Measurements — directly set + call validator instead of dispatching input
+  // (dispatching input triggers autoSave which would then overwrite Supabase with partial state)
   Object.entries(state.meas || {}).forEach(([id,data]) => {
     const v = document.getElementById('val-'+id);
     const n = document.getElementById('note-'+id);
-    if (v) { v.value = data.value || ''; v.dispatchEvent(new Event('input',{bubbles:true})); }
+    if (v) v.value = data.value || '';
     if (n) n.value = data.note || '';
+  });
+
+  // Re-run validation for every measurement so PASS/FAIL status updates
+  const allMeasForValidate = [...(typeof sec1Meas!=='undefined'?sec1Meas:[]),
+                              ...(typeof sec2Meas!=='undefined'?sec2Meas:[]),
+                              ...(typeof sec3Meas!=='undefined'?sec3Meas:[]),
+                              ...(typeof sec4Meas!=='undefined'?sec4Meas:[]),
+                              ...(typeof sec5Meas!=='undefined'?sec5Meas:[]),
+                              ...(typeof sec7Meas!=='undefined'?sec7Meas:[]),
+                              ...(typeof sec8Meas!=='undefined'?sec8Meas:[])];
+  allMeasForValidate.forEach(r => {
+    if (typeof validateMeas === 'function') validateMeas(r.id, r.min, r.max);
   });
 
   // Visual inspection
@@ -2520,6 +2537,10 @@ function restoreState(state) {
   });
 
   if (typeof updateProgress === 'function') updateProgress();
+
+  } finally {
+    _isRestoring = false;
+  }
 }
 
 // Attach change/input listeners to every data-bearing element so edits trigger autoSave.
@@ -2714,9 +2735,11 @@ function setSyncStatus(msg) {
 
 // ── Auto-sync override ──
 function autoSave() {
+  if (_isRestoring) return;   // don't push back to cloud while we're rehydrating form
   clearTimeout(_syncTimer);
   setSyncStatus('Saving...');
   _syncTimer = setTimeout(async () => {
+    if (_isRestoring) return;
     if (!CURRENT_JOB_ID) {
       // Fall back to localStorage if no job ID
       try {
@@ -2732,5 +2755,5 @@ function autoSave() {
 }
 
 // Periodic cloud sync every 30 seconds
-setInterval(()=>{ if(CURRENT_JOB_ID){ collectState && syncToCloud(CURRENT_JOB_ID, collectState()); } },30000);
+setInterval(()=>{ if(CURRENT_JOB_ID && !_isRestoring){ collectState && syncToCloud(CURRENT_JOB_ID, collectState()); } },30000);
 </script>
