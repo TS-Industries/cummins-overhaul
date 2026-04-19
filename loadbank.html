@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Load Bank Run Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1A3A5C;--navy-mid:#1E4D7B;--navy-light:#2563EB;
+  --gold:#D97706;--gold-light:#FEF3C7;--gold-mid:#FFFBEB;--gold-bright:#F59E0B;
+  --pass:#065F46;--pass-bg:#D1FAE5;--fail:#991B1B;--fail-bg:#FEE2E2;
+  --warn:#92400E;--warn-bg:#FEF3C7;
+  --white:#FFFFFF;--dark:#1E2A3A;--gray:#6B7280;--gray-light:#F3F4F6;--border:#E5E7EB;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-height:100vh;}
+
+/* ── HEADER ── */
+.site-header{background:var(--navy);border-bottom:3px solid var(--gold);padding:0 2rem;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
+.header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:58px;gap:1rem;}
+.header-center{flex:1;text-align:center;}
+.header-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;color:white;}
+.header-title span{color:var(--gold);}
+.header-subtitle{font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:.5px;}
+.header-actions{display:flex;gap:.5rem;}
+.btn{padding:6px 14px;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;cursor:pointer;border:none;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
+.btn-gold{background:var(--gold);color:var(--navy);}
+.btn-gold:hover{background:var(--gold-bright);}
+.btn-outline{background:transparent;color:white;border:1.5px solid rgba(255,255,255,0.3);}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+
+/* ── CONTAINER ── */
+.container{max-width:1100px;margin:0 auto;padding:1.5rem 2rem;}
+
+/* ── UNIT INFO CARD ── */
+.unit-card{background:var(--navy);border-radius:12px;border:1px solid rgba(217,119,6,0.3);padding:1rem 1.5rem;margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.875rem;position:relative;overflow:hidden;}
+.unit-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),transparent);}
+.unit-field label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:4px;}
+.unit-field input{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:5px 10px;color:white;font-family:'Barlow',sans-serif;font-size:13px;}
+.unit-field input:focus{outline:none;border-color:var(--gold);}
+.unit-field input::placeholder{color:rgba(255,255,255,0.3);}
+.unit-card-title{grid-column:1/-1;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);border-bottom:1px solid rgba(217,119,6,0.25);padding-bottom:.5rem;margin-bottom:.25rem;}
+
+/* ── SECTION PANELS ── */
+.section{background:white;border-radius:12px;margin-bottom:1rem;border:1px solid var(--border);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);}
+.section-header{background:var(--navy);padding:.875rem 1.25rem;display:flex;align-items:center;gap:.75rem;cursor:pointer;user-select:none;}
+.section-header:hover{background:var(--navy-mid);}
+.section-num{background:var(--gold);color:var(--navy);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;flex-shrink:0;}
+.section-title-wrap{flex:1;}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.5px;color:white;}
+.section-subtitle{font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;}
+.section-badges{display:flex;gap:.5rem;align-items:center;}
+.badge{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:.5px;}
+.badge-gold{background:rgba(217,119,6,0.25);color:var(--gold);}
+.badge-gray{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);}
+.chevron{color:rgba(255,255,255,0.5);font-size:14px;transition:transform .2s;flex-shrink:0;}
+.section.open .chevron{transform:rotate(180deg);}
+.section-body{display:none;padding:1.25rem 1.5rem;}
+.section.open .section-body{display:block;}
+
+/* ── LOG TABLE ── */
+.log-table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-bottom:1rem;}
+.log-table{width:100%;border-collapse:collapse;font-size:13px;}
+.log-table thead tr.group-header th{background:var(--navy-mid);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:.4rem .75rem;text-align:center;border-bottom:none;}
+.log-table thead tr.col-header th{background:var(--navy);color:white;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:.5rem .75rem;text-align:center;border-bottom:2px solid var(--gold);}
+.log-table thead tr.col-header th:first-child{text-align:left;}
+.log-table tbody tr:nth-child(odd){background:var(--gold-mid);}
+.log-table tbody tr:nth-child(even){background:white;}
+.log-table tbody tr:hover{background:#EFF6FF;}
+.log-table td{padding:.45rem .75rem;border-bottom:1px solid rgba(217,119,6,0.1);text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#1E2A3A;}
+.log-table td:first-child{text-align:left;font-family:'Barlow',sans-serif;font-weight:600;font-size:12px;color:var(--navy);}
+.log-table td.kw-cell{font-weight:800;color:var(--navy);background:rgba(26,58,92,0.08);font-size:13px;}
+.log-table td input{width:100%;border:none;background:transparent;text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#1E2A3A;padding:2px 4px;border-radius:4px;}
+.log-table td input:focus{outline:2px solid var(--gold);background:white;color:#1E2A3A;}
+.log-table td.time-cell input{text-align:left;font-family:'Barlow',sans-serif;font-weight:700;font-size:13px;color:var(--navy);}
+.add-row-btn{display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;color:var(--navy-mid);background:var(--gold-mid);border:1.5px dashed rgba(217,119,6,0.4);border-radius:6px;cursor:pointer;width:100%;justify-content:center;transition:all .15s;margin-top:.5rem;}
+.add-row-btn:hover{background:var(--gold-light);border-color:var(--gold);}
+
+/* ── CALCULATOR ── */
+.calc-card{background:var(--navy);border-radius:10px;border:1px solid rgba(217,119,6,0.3);padding:1rem 1.25rem;margin-bottom:1rem;position:relative;overflow:hidden;}
+.calc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),transparent);}
+.calc-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);margin-bottom:.25rem;}
+.calc-subtitle{font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:1rem;}
+.calc-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1rem;}
+.calc-field label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:4px;}
+.calc-field .input-wrap{display:flex;align-items:center;gap:.4rem;}
+.calc-field input{flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px;color:white;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;}
+.calc-field input:focus{outline:none;border-color:var(--gold);}
+.calc-field .unit-tag{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);flex-shrink:0;}
+.calc-field .locked-tag{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:rgba(217,119,6,0.7);flex-shrink:0;letter-spacing:.5px;}
+.calc-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;}
+.result-card{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:.875rem 1rem;}
+.result-card.highlight{background:rgba(217,119,6,0.15);border-color:var(--gold);}
+.result-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:.25rem;}
+.result-value{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:white;line-height:1;}
+.result-card.highlight .result-value{color:var(--gold);}
+.result-unit{font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);margin-left:3px;}
+.result-formula{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.3);margin-top:.375rem;line-height:1.4;}
+.calc-note{background:rgba(217,119,6,0.1);border:1px solid rgba(217,119,6,0.25);border-radius:6px;padding:.625rem .875rem;font-size:11px;color:rgba(255,255,255,0.6);margin-top:.75rem;line-height:1.5;}
+.calc-note strong{color:var(--gold);}
+
+/* ── ALERT ── */
+.alert{border-radius:6px;padding:.625rem .875rem;font-size:12px;font-weight:600;margin:.5rem 0;display:flex;gap:.5rem;align-items:flex-start;line-height:1.5;}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:3px solid #3B82F6;}
+
+/* ── PRINT ── */
+@media print{
+  body{background:white;}
+  .site-header{position:static;box-shadow:none;}
+  .btn,.add-row-btn{display:none;}
+  .section{box-shadow:none;}
+  .section-body{display:block!important;}
+  .unit-field input,.calc-field input,.log-table td input{border:1px solid #ccc;background:white;color:black;}
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:700px){
+  .header-inner{height:auto;padding:.75rem 0;flex-wrap:wrap;}
+  .container{padding:1rem;}
+  .calc-results{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SITE HEADER
+════════════════════════════════════════════════════════════ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-center">
+      <div class="header-title">Load Bank <span>Run Report</span></div>
+      <div class="header-subtitle">Post-Overhaul Generator Acceptance Testing</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline" onclick="window.print()">&#128438; Print</button>
+      <button class="btn btn-gold" onclick="clearAll()">&#10006; Clear All</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════════════════════ -->
+<div class="container">
+
+  <!-- ── UNIT INFORMATION ── -->
+  <div class="unit-card">
+    <div class="unit-card-title">Unit Information</div>
+
+    <div class="unit-field">
+      <label>Date</label>
+      <input type="text" id="f-date" placeholder="MM/DD/YYYY">
+    </div>
+    <div class="unit-field">
+      <label>Generator Brand</label>
+      <input type="text" id="f-brand" placeholder="e.g. Cummins">
+    </div>
+    <div class="unit-field">
+      <label>Generator Rating</label>
+      <input type="text" id="f-rating" placeholder="e.g. 100 kW">
+    </div>
+    <div class="unit-field">
+      <label>Engine Model</label>
+      <input type="text" id="f-engine" placeholder="e.g. 8.3G">
+    </div>
+    <div class="unit-field">
+      <label>Engine Serial No.</label>
+      <input type="text" id="f-eng-sn" placeholder="Serial number">
+    </div>
+    <div class="unit-field">
+      <label>Generator Serial No.</label>
+      <input type="text" id="f-gen-sn" placeholder="Serial number">
+    </div>
+    <div class="unit-field">
+      <label>Hours on Unit</label>
+      <input type="text" id="f-hours" placeholder="e.g. 1,250 hrs">
+    </div>
+    <div class="unit-field">
+      <label>Technician</label>
+      <input type="text" id="f-tech" placeholder="Name">
+    </div>
+  </div>
+
+  <!-- ── SECTION 1: DATA LOG ── -->
+  <div class="section open" id="sec-log">
+    <div class="section-header" onclick="toggleSection('sec-log')">
+      <div class="section-num">1</div>
+      <div class="section-title-wrap">
+        <div class="section-title">LOAD BANK RUN DATA LOG</div>
+        <div class="section-subtitle">Record voltage, amperage, Hz, oil pressure, and temperature at each time interval</div>
+      </div>
+      <div class="section-badges">
+        <span class="badge badge-gold">3-Phase &middot; kW Auto-Calculated</span>
+        <span class="badge badge-gray" id="badge-rows">0 readings</span>
+      </div>
+      <div class="chevron">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      <div class="log-table-wrap">
+        <table class="log-table" id="log-table">
+          <thead>
+            <tr class="group-header">
+              <th rowspan="2" style="text-align:left;vertical-align:middle;">Time</th>
+              <th colspan="3">VOLTS</th>
+              <th colspan="3">AMPS</th>
+              <th rowspan="2" style="vertical-align:middle;">Hz</th>
+              <th rowspan="2" style="vertical-align:middle;">Oil PSI</th>
+              <th rowspan="2" style="vertical-align:middle;">Engine Temp (&deg;F)</th>
+              <th rowspan="2" style="vertical-align:middle;">kW</th>
+            </tr>
+            <tr class="col-header">
+              <th>L1&ndash;L2</th>
+              <th>L2&ndash;L3</th>
+              <th>L3&ndash;L1</th>
+              <th>L1</th>
+              <th>L2</th>
+              <th>L3</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <button class="add-row-btn" onclick="addRow()">&#43; Add Reading Row</button>
+
+      <div class="alert alert-info" style="margin-top:.75rem;">
+        &#9432;&nbsp; <span><strong>kW</strong> is auto-calculated using the 3-phase formula: <code>&radic;3 &times; avg(V) &times; avg(A) &divide; 1000</code>. Enter voltage and amperage readings to populate.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: BREAK-IN CALCULATOR ── -->
+  <div class="section open" id="sec-calc">
+    <div class="section-header" onclick="toggleSection('sec-calc')">
+      <div class="section-num">2</div>
+      <div class="section-title-wrap">
+        <div class="section-title">LOAD BANK BREAK-IN CALCULATOR</div>
+        <div class="section-subtitle">75% Engine Load Target &mdash; Resistive load bank (Power Factor = 1.0)</div>
+      </div>
+      <div class="section-badges">
+        <span class="badge badge-gold">PF = 1.0 Resistive</span>
+        <span class="badge badge-gray">75% Load</span>
+      </div>
+      <div class="chevron">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      <div class="calc-card">
+        <div class="calc-title">Break-In Load Calculator</div>
+        <div class="calc-subtitle">Enter Engine HP, Generator Rating, and Voltage &mdash; dial your load bank to the TARGET AMPS shown below.</div>
+
+        <div class="calc-inputs">
+          <div class="calc-field">
+            <label>Engine HP</label>
+            <div class="input-wrap">
+              <input type="number" id="c-hp" value="99" min="1" oninput="calcBreakIn()">
+              <span class="unit-tag">hp</span>
+            </div>
+          </div>
+          <div class="calc-field">
+            <label>Generator Rating</label>
+            <div class="input-wrap">
+              <input type="number" id="c-kw" placeholder="e.g. 75" min="1" oninput="calcBreakIn()">
+              <span class="unit-tag">kW</span>
+            </div>
+          </div>
+          <div class="calc-field">
+            <label>Generator Voltage</label>
+            <div class="input-wrap">
+              <input type="number" id="c-v" value="480" min="1" oninput="calcBreakIn()">
+              <span class="unit-tag">V</span>
+            </div>
+          </div>
+          <div class="calc-field">
+            <label>Power Factor</label>
+            <div class="input-wrap">
+              <input type="text" value="1.0" readonly style="opacity:.6;cursor:not-allowed;">
+              <span class="locked-tag">LOCKED</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="calc-results">
+          <div class="result-card">
+            <div class="result-label">Generator Rated Output</div>
+            <div class="result-value"><span id="r-rated">&mdash;</span><span class="result-unit">kW</span></div>
+            <div class="result-formula">Pulled from Generator Rating input</div>
+          </div>
+          <div class="result-card">
+            <div class="result-label">75% Load Target</div>
+            <div class="result-value"><span id="r-75kw">&mdash;</span><span class="result-unit">kW</span></div>
+            <div class="result-formula">HP &times; 0.75 &times; 0.746 kW/hp</div>
+          </div>
+          <div class="result-card highlight">
+            <div class="result-label">&#9654; Set Load Bank To</div>
+            <div class="result-value"><span id="r-amps">&mdash;</span><span class="result-unit">AMPS</span></div>
+            <div class="result-formula">HP &times; 0.75 &times; 0.746 &times; 1000 &divide; (&radic;3 &times; V)</div>
+          </div>
+        </div>
+
+        <div class="calc-note">
+          <strong>Note:</strong> Power Factor is locked at 1.0 for resistive load banks. The 75% load target is based on Engine HP for amps, and Generator Rating for kW reference. Dial load bank amps to match the <strong>SET LOAD BANK TO</strong> value above during post-overhaul break-in.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div style="text-align:center;padding:1.5rem 0 2rem;font-size:11px;color:rgba(255,255,255,0.25);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;">
+    LOAD BANK RUN REPORT &nbsp;&middot;&nbsp; Rev: March 22, 2026
+  </div>
+
+</div><!-- /container -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════ -->
+<script>
+// ── Section toggle ──
+function toggleSection(id){
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+}
+
+// ── Row management ──
+let rowCount = 0;
+
+function addRow(){
+  rowCount++;
+  const tbody = document.getElementById('log-tbody');
+  const tr = document.createElement('tr');
+  tr.id = 'row-' + rowCount;
+  tr.innerHTML = `
+    <td class="time-cell"><input type="text" placeholder="00:00" oninput="updateBadge()" aria-label="Time"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L1-L2 Volts"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L2-L3 Volts"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L3-L1 Volts"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L1 Amps"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L2 Amps"></td>
+    <td><input type="number" step="0.1" placeholder="—" oninput="calcKW(${rowCount})" aria-label="L3 Amps"></td>
+    <td><input type="number" step="0.1" placeholder="—" aria-label="Hz"></td>
+    <td><input type="number" step="0.1" placeholder="—" aria-label="Oil PSI"></td>
+    <td><input type="number" step="0.1" placeholder="—" aria-label="Engine Temp"></td>
+    <td class="kw-cell" id="kw-${rowCount}">—</td>
+  `;
+  tbody.appendChild(tr);
+  updateBadge();
+}
+
+function calcKW(rowId){
+  const tr = document.getElementById('row-' + rowId);
+  const inputs = tr.querySelectorAll('input');
+  const v1 = parseFloat(inputs[1].value);
+  const v2 = parseFloat(inputs[2].value);
+  const v3 = parseFloat(inputs[3].value);
+  const a1 = parseFloat(inputs[4].value);
+  const a2 = parseFloat(inputs[5].value);
+  const a3 = parseFloat(inputs[6].value);
+  const cell = document.getElementById('kw-' + rowId);
+  if([v1,v2,v3,a1,a2,a3].some(isNaN)){
+    cell.textContent = '—';
+  } else {
+    const avgV = (v1+v2+v3)/3;
+    const avgA = (a1+a2+a3)/3;
+    const kw = (Math.sqrt(3) * avgV * avgA / 1000).toFixed(2);
+    cell.textContent = kw;
+  }
+}
+
+function updateBadge(){
+  const rows = document.querySelectorAll('#log-tbody tr');
+  document.getElementById('badge-rows').textContent = rows.length + ' reading' + (rows.length !== 1 ? 's' : '');
+}
+
+// ── Break-in calculator ──
+function calcBreakIn(){
+  const hp = parseFloat(document.getElementById('c-hp').value);
+  const kw = parseFloat(document.getElementById('c-kw').value);
+  const v  = parseFloat(document.getElementById('c-v').value);
+
+  document.getElementById('r-rated').textContent = isNaN(kw) ? '—' : kw.toFixed(1);
+
+  if(!isNaN(hp)){
+    const target75kw = (hp * 0.75 * 0.746).toFixed(2);
+    document.getElementById('r-75kw').textContent = target75kw;
+    if(!isNaN(v) && v > 0){
+      const amps = ((hp * 0.75 * 0.746 * 1000) / (Math.sqrt(3) * v)).toFixed(1);
+      document.getElementById('r-amps').textContent = amps;
+    } else {
+      document.getElementById('r-amps').textContent = '—';
+    }
+  } else {
+    document.getElementById('r-75kw').textContent = '—';
+    document.getElementById('r-amps').textContent = '—';
+  }
+}
+
+// ── Clear all ──
+function clearAll(){
+  if(!confirm('Clear all entered data? This cannot be undone.')) return;
+  document.querySelectorAll('.unit-card input, .calc-field input:not([readonly])').forEach(i => {
+    if(i.id === 'c-hp') i.value = '99';
+    else if(i.id === 'c-v') i.value = '480';
+    else i.value = '';
+  });
+  document.getElementById('log-tbody').innerHTML = '';
+  rowCount = 0;
+  updateBadge();
+  calcBreakIn();
+}
+
+
+// ══ SUPABASE CLOUD SYNC — LOAD BANK ══
+const SUPABASE_URL = 'https://skbdamrynkzxdfjhmawj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrYmRhbXJ5bmt6eGRmamhtYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODU5MjAsImV4cCI6MjA5MTk2MTkyMH0.JSIr-FKc-u3vqEhFdDNVt_9Y_tKiRCSAguDM7H0LSOQ';
+const TABLE = 'overhaul_data';
+let CURRENT_JOB_ID = null;
+let _syncTimer = null;
+
+async function sbFetch(path, options={}) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...( options.headers || {})
+    },
+    ...options
+  });
+  return res;
+}
+
+function injectJobUI() {
+  const header = document.querySelector('.header-inner') || document.querySelector('header') || document.body;
+  const jobDiv = document.createElement('div');
+  jobDiv.style.cssText = 'position:fixed;top:10px;right:10px;z-index:999;display:flex;align-items:center;gap:.5rem;background:rgba(26,58,92,0.95);padding:8px 12px;border-radius:8px;border:1px solid rgba(217,119,6,0.4);';
+  jobDiv.innerHTML = `
+    <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,0.6);">JOB #</label>
+    <input id="job-id-input" type="text" placeholder="e.g. TSI-2025-001"
+      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;">
+    <button onclick="loadJob()" style="background:#D97706;color:#1A3A5C;border:none;border-radius:5px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">LOAD</button>
+    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.6);font-family:'Barlow',sans-serif;min-width:80px;"></span>
+  `;
+  document.body.appendChild(jobDiv);
+  const lastJob = localStorage.getItem('tsi_last_job_id');
+  if (lastJob) document.getElementById('job-id-input').value = lastJob;
+}
+
+function collectLoadBankState() {
+  const state = { fields:{}, rows:[] };
+  // Unit info fields
+  ['f-date','f-brand','f-rating','f-engine','f-eng-sn','f-gen-sn','f-hours','f-tech',
+   'c-hp','c-v'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) state.fields[id] = el.value;
+  });
+  // Log rows
+  document.querySelectorAll('#log-tbody tr').forEach((tr, i) => {
+    const rowData = {};
+    tr.querySelectorAll('input').forEach(inp => {
+      rowData[inp.id || inp.name || ('col_'+inp.cellIndex)] = inp.value;
+    });
+    state.rows.push(rowData);
+  });
+  return state;
+}
+
+function setSyncStatus(msg) {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = msg;
+}
+
+async function autoSaveLoadBank() {
+  clearTimeout(_syncTimer);
+  setSyncStatus('Saving...');
+  _syncTimer = setTimeout(async () => {
+    if (!CURRENT_JOB_ID) { setSyncStatus('No job #'); return; }
+    const state = collectLoadBankState();
+    const now = new Date().toISOString();
+    const rows = [];
+    Object.entries(state.fields).forEach(([k,v]) => {
+      rows.push({ job_id: CURRENT_JOB_ID + '_lb', field_id: 'lb_field_' + k, field_value: String(v||''), updated_at: now });
+    });
+    rows.push({ job_id: CURRENT_JOB_ID + '_lb', field_id: 'lb_rows', field_value: JSON.stringify(state.rows), updated_at: now });
+    await sbFetch(TABLE, {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify(rows)
+    });
+    setSyncStatus('✓ Saved ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+  }, 1500);
+}
+
+async function loadJob() {
+  const input = document.getElementById('job-id-input');
+  const jobId = input ? input.value.trim() : '';
+  if (!jobId) { alert('Enter a job number first.'); return; }
+  CURRENT_JOB_ID = jobId;
+  localStorage.setItem('tsi_last_job_id', jobId);
+  setSyncStatus('Loading...');
+  try {
+    const res = await sbFetch(TABLE + '?job_id=eq.' + encodeURIComponent(jobId + '_lb') + '&limit=500');
+    const rows = await res.json();
+    if (!rows || rows.length === 0) { setSyncStatus('New job — ready'); return; }
+    rows.forEach(row => {
+      if (row.field_id === 'lb_rows') {
+        try {
+          const savedRows = JSON.parse(row.field_value);
+          // Clear existing rows and rebuild
+          const tbody = document.getElementById('log-tbody');
+          if (tbody) {
+            tbody.innerHTML = '';
+            rowCount = 0;
+            savedRows.forEach(() => addRow());
+            const trs = tbody.querySelectorAll('tr');
+            savedRows.forEach((rowData, i) => {
+              if (trs[i]) {
+                Object.entries(rowData).forEach(([k,v]) => {
+                  const inp = trs[i].querySelector('#'+k) || trs[i].querySelector('[name="'+k+'"]');
+                  if (inp) inp.value = v;
+                });
+              }
+            });
+            updateBadge();
+          }
+        } catch(e) { console.warn('Row restore failed', e); }
+      } else if (row.field_id.startsWith('lb_field_')) {
+        const fieldId = row.field_id.replace('lb_field_','');
+        const el = document.getElementById(fieldId);
+        if (el) el.value = row.field_value;
+      }
+    });
+    calcBreakIn();
+    setSyncStatus('✓ Loaded');
+  } catch(e) {
+    setSyncStatus('Load failed');
+    console.error(e);
+  }
+}
+
+// Attach auto-save to all inputs
+document.addEventListener('DOMContentLoaded', () => {
+  injectJobUI();
+  setTimeout(() => {
+    document.querySelectorAll('input').forEach(el => {
+      el.addEventListener('input', autoSaveLoadBank);
+      el.addEventListener('change', autoSaveLoadBank);
+    });
+  }, 500);
+});
+
+// ── Init ──
+(function init(){
+  for(let i = 0; i < 8; i++) addRow();
+  calcBreakIn();
+})();
+</script>
+</body>
+</html>
