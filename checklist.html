@@ -19,13 +19,30 @@
 body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-height:100vh;}
 
 /* ── HEADER ── */
-.site-header{background:linear-gradient(135deg,#0D2137 0%,#1A3A5C 50%,#0D2137 100%);border-bottom:3px solid var(--gold);padding:0 2rem;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,0.5);}
-.header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:center;height:62px;gap:1rem;}
-.header-center{text-align:center;}
+.site-header{background:linear-gradient(135deg,#0D2137 0%,#1A3A5C 50%,#0D2137 100%);border-bottom:3px solid var(--gold);padding:.5rem 2rem;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,0.5);}
+.header-inner{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;min-height:62px;gap:.75rem 1rem;}
+.header-center{text-align:center;flex:1 1 auto;min-width:0;order:2;}
 .header-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;color:white;letter-spacing:.5px;}
 .header-title span{color:var(--gold);}
 .header-subtitle{font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:.5px;margin-top:2px;}
-.header-actions{position:absolute;right:2rem;display:flex;gap:.5rem;}
+.header-actions{display:flex;gap:.5rem;flex-shrink:0;order:3;}
+.header-job{display:flex;align-items:center;gap:.5rem;flex-shrink:0;order:1;flex-wrap:wrap;}
+
+/* Mobile header — stack cleanly, no overlap */
+@media (max-width: 768px){
+  .site-header{padding:.5rem .75rem;position:relative;}
+  .header-inner{flex-direction:column;align-items:stretch;min-height:0;gap:.5rem;}
+  .header-center{order:1;text-align:center;padding:.25rem 0;}
+  .header-title{font-size:17px;line-height:1.2;}
+  .header-subtitle{font-size:10px;}
+  .header-job{order:2;justify-content:center;flex-wrap:wrap;gap:.4rem .5rem;padding:.25rem 0;}
+  .header-job > label{flex:0 0 auto;}
+  #job-id-input{flex:1 1 180px!important;width:auto!important;max-width:none!important;min-width:0!important;font-size:16px!important;padding:8px 10px!important;min-height:38px;}
+  .header-job button{flex:0 0 auto;min-height:38px;padding:8px 14px!important;font-size:13px!important;}
+  #sync-status{flex-basis:100%!important;}
+  .header-actions{order:3;justify-content:center;}
+  .header-actions .btn{flex:1 1 auto;max-width:200px;font-size:12px;padding:.5rem .75rem;min-height:38px;}
+}
 .btn{padding:6px 14px;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;cursor:pointer;border:none;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
 .btn-gold{background:var(--gold);color:var(--navy);}
 .btn-gold:hover{background:var(--gold-bright);}
@@ -214,7 +231,10 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
 .report-status-banner.progress{background:var(--warn-bg);color:var(--warn);}
 .report-status-banner.incomplete{background:var(--gray-light);color:var(--gray);}
 .report-body{padding:1.5rem 2rem;}
-.report-section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:.375rem;margin-bottom:1rem;margin-top:1.5rem;}
+.report-body > *{margin-bottom:1.5rem;}
+.report-body > *:last-child{margin-bottom:0;}
+.report-section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:.375rem;margin-bottom:1.25rem;margin-top:2.5rem;}
+.report-section-title:first-of-type{margin-top:0;}
 .ai-summary-box{background:var(--info-bg);border:1px solid rgba(37,99,235,0.2);border-radius:10px;padding:1.25rem;margin-bottom:1rem;position:relative;}
 .ai-badge{background:var(--navy);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:4px;margin-bottom:.75rem;display:inline-block;}
 .ai-summary-text{font-size:13px;line-height:1.7;color:var(--dark);}
@@ -347,6 +367,12 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
 .rpt-photo-caption{font-size:9px;font-weight:600;color:var(--gray);text-align:center;line-height:1.3;max-width:150px;}
 .rpt-photo-status-pass{color:var(--pass);}
 .rpt-photo-status-fail{color:var(--fail);}
+@media (max-width: 768px){
+  .report-body{padding:1rem 1rem;}
+  .report-body > *{margin-bottom:1.75rem;}
+  .report-section-title{margin-top:2rem;font-size:13px;}
+  .scorecard-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.625rem;}
+}
 @media print{
   .site-header,.report-overlay,.btn,.progress-card{display:none!important;}
   .section{box-shadow:none;border:1px solid #ddd;}
@@ -1914,11 +1940,15 @@ function openReport(){
     const cls=sf>0?'sc-fail':sp===mArr.length&&mArr.length>0?'sc-pass':'sc-gray';
     sc.innerHTML+=`<div class="scorecard ${cls}"><div class="scorecard-title">${def.title}</div><div class="scorecard-pct">${pct}%</div><div class="scorecard-counts">${sp} pass / ${sf} fail</div></div>`;
   });
-  // Meas table
+  // Meas table — grouped by section with divider rows
   const mt=document.getElementById('rpt-meas-tbody');
   mt.innerHTML='';
   sectionDefs.forEach(def=>{
-    def.meas().forEach(r=>{
+    const mArr=def.meas();
+    if(!mArr || !mArr.length) return;
+    // Section divider row
+    mt.innerHTML+=`<tr class="rpt-section-row"><td colspan="6" style="background:var(--navy);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;padding:.6rem .75rem;border-top:2px solid var(--gold);border-bottom:1px solid var(--gold);">${def.id}. ${def.title}</td></tr>`;
+    mArr.forEach(r=>{
       const v=document.getElementById('val-'+r.id);
       const s=document.getElementById('stat-'+r.id);
       const n=document.getElementById('note-'+r.id);
@@ -1926,8 +1956,10 @@ function openReport(){
       const cls=st==='PASS'?'r-pass':st==='FAIL'?'r-fail':'r-pend';
       mt.innerHTML+=`<tr><td style="font-size:10px;color:var(--gray);">${def.title}</td><td>${r.label}</td><td class="mono">${r.spec}</td><td class="mono">${v?v.value:'—'}</td><td class="${cls}">${st}</td><td style="font-size:10px;color:var(--gray);">${n?n.value:''}</td></tr>`;
     });
+    // Spacer row for visual breathing room
+    mt.innerHTML+=`<tr class="rpt-spacer-row"><td colspan="6" style="height:10px;background:#F3F4F6;border:none;padding:0;"></td></tr>`;
   });
-  // Findings
+  // Findings — grouped by section with header rows between them
   const fl=document.getElementById('rpt-findings');
   fl.innerHTML='';
   const viDefsR=[
@@ -1939,15 +1971,21 @@ function openReport(){
     {prefix:'vi7',items:viSec7,title:'Valvetrain'},
   ];
   viDefsR.forEach(({prefix,items,title})=>{
+    // Collect findings for this section first, only render the header if there are any
+    const sectionFindings=[];
     items.forEach((label,i)=>{
       const id=`${prefix}-${i}`;
       const pb=document.getElementById('pass-'+id);
       const fb=document.getElementById('fail-'+id);
       if(pb&&pb.classList.contains('selected-pass'))
-        fl.innerHTML+=`<li class="finding-ok"><strong>[${title}]</strong> ${label}</li>`;
+        sectionFindings.push(`<li class="finding-ok">${label}</li>`);
       else if(fb&&fb.classList.contains('selected-fail'))
-        fl.innerHTML+=`<li class="finding-fail"><strong>[${title}]</strong> ${label}</li>`;
+        sectionFindings.push(`<li class="finding-fail">${label}</li>`);
     });
+    if(sectionFindings.length){
+      fl.innerHTML+=`<li class="finding-section-header" style="list-style:none;background:var(--navy);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;padding:.5rem .75rem;margin:.75rem 0 .375rem 0;border-left:3px solid var(--gold);border-radius:3px;">${title}</li>`;
+      fl.innerHTML+=sectionFindings.join('');
+    }
   });
   if(!fl.innerHTML) fl.innerHTML='<li style="color:var(--gray);font-size:12px;padding:.5rem;">No visual inspection items recorded yet.</li>';
   // Parts
@@ -2416,15 +2454,17 @@ function injectJobUI() {
   const header = document.querySelector('.header-inner');
   if (!header) return;
   const jobDiv = document.createElement('div');
-  jobDiv.style.cssText = 'position:absolute;left:2rem;display:flex;align-items:center;gap:.5rem;';
+  jobDiv.className = 'header-job';
   jobDiv.innerHTML = `
     <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,0.6);">JOB #</label>
     <input id="job-id-input" type="text" placeholder="e.g. TSI-2025-001"
-      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;">
+      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;max-width:45vw;">
     <button onclick="loadJob()" style="background:var(--gold);color:var(--navy);border:none;border-radius:5px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">LOAD</button>
-    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.5);font-family:'Barlow',sans-serif;"></span>
+    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.5);font-family:'Barlow',sans-serif;flex-basis:100%;text-align:center;"></span>
   `;
-  header.appendChild(jobDiv);
+  // Insert job div as the FIRST child so it appears on the left (desktop)
+  // and at the top (mobile, via CSS order rules)
+  header.insertBefore(jobDiv, header.firstChild);
   // Auto-load last job from localStorage
   const lastJob = localStorage.getItem('tsi_last_job_id');
   if (lastJob) {
