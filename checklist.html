@@ -2266,6 +2266,144 @@ function openLightbox_report(src){
 }
 
 
+// ══ STATE COLLECT / RESTORE / AUTO-SAVE (required by init) ══
+
+// Gather the full form state into a plain object.
+function collectState() {
+  const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{} };
+
+  // Meta fields
+  ['wo','serial','model','unit','customer','tech','date','hours'].forEach(k => {
+    const el = document.getElementById('uf-'+k);
+    if (el) state.meta[k] = el.value || '';
+  });
+
+  // Measurement rows (value + note per row id)
+  const allMeas = [...sec1Meas,...sec2Meas,...sec3Meas,...sec4Meas,...sec5Meas,...sec7Meas,...sec8Meas];
+  allMeas.forEach(r => {
+    const v = document.getElementById('val-'+r.id);
+    const n = document.getElementById('note-'+r.id);
+    if (v || n) state.meas[r.id] = { value: v ? v.value : '', note: n ? n.value : '' };
+  });
+
+  // Visual inspection (pass / fail / pending)
+  const viDefs = [
+    {prefix:'vi1',items:viSec1},{prefix:'vi2',items:viSec2},{prefix:'vi3',items:viSec3},
+    {prefix:'vi4',items:viSec4},{prefix:'vi5',items:viSec5},{prefix:'vi7',items:viSec7},
+    {prefix:'vi8',items:viSec8}
+  ];
+  viDefs.forEach(({prefix,items}) => {
+    items.forEach((label,i) => {
+      const id = `${prefix}-${i}`;
+      const pb = document.getElementById('pass-'+id);
+      const fb = document.getElementById('fail-'+id);
+      let result = 'pending';
+      if (pb && pb.classList.contains('selected-pass')) result = 'pass';
+      else if (fb && fb.classList.contains('selected-fail')) result = 'fail';
+      state.vi[id] = result;
+    });
+  });
+
+  // Bolt checkboxes
+  document.querySelectorAll('[id^="bolt-"]').forEach(el => {
+    if (el.type === 'checkbox') state.bolts[el.id.replace('bolt-','')] = el.checked;
+  });
+
+  // Notes (section-level textareas, if any)
+  document.querySelectorAll('[id^="notes-"]').forEach(el => {
+    state.notes[el.id.replace('notes-','')] = el.value || '';
+  });
+
+  return state;
+}
+
+// Apply a loaded state back onto the form.
+function restoreState(state) {
+  if (!state) return;
+
+  // Meta
+  Object.entries(state.meta || {}).forEach(([k,v]) => {
+    const el = document.getElementById('uf-'+k);
+    if (el) el.value = v || '';
+  });
+
+  // Measurements
+  Object.entries(state.meas || {}).forEach(([id,data]) => {
+    const v = document.getElementById('val-'+id);
+    const n = document.getElementById('note-'+id);
+    if (v) { v.value = data.value || ''; v.dispatchEvent(new Event('input',{bubbles:true})); }
+    if (n) n.value = data.note || '';
+  });
+
+  // Visual inspection
+  Object.entries(state.vi || {}).forEach(([id, result]) => {
+    const pb = document.getElementById('pass-'+id);
+    const fb = document.getElementById('fail-'+id);
+    if (pb) pb.classList.remove('selected-pass');
+    if (fb) fb.classList.remove('selected-fail');
+    if (result === 'pass' && pb) pb.classList.add('selected-pass');
+    if (result === 'fail' && fb) fb.classList.add('selected-fail');
+  });
+
+  // Bolts
+  Object.entries(state.bolts || {}).forEach(([pos,v]) => {
+    const el = document.getElementById('bolt-'+pos);
+    if (el && el.type === 'checkbox') el.checked = !!v;
+  });
+
+  // Notes
+  Object.entries(state.notes || {}).forEach(([s,v]) => {
+    const el = document.getElementById('notes-'+s);
+    if (el) el.value = v || '';
+  });
+
+  if (typeof updateProgress === 'function') updateProgress();
+}
+
+// Attach change/input listeners to every data-bearing element so edits trigger autoSave.
+function attachAutoSaveListeners() {
+  // Any input, select, textarea under the main form area
+  const handler = () => { if (typeof autoSave === 'function') autoSave(); };
+  document.querySelectorAll('input, select, textarea').forEach(el => {
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+  // Pass/Fail buttons use classList changes — we also catch their clicks
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.id && (t.id.startsWith('pass-') || t.id.startsWith('fail-'))) {
+      // let the original handler run, then save
+      setTimeout(handler, 0);
+    }
+  });
+}
+
+// On load: offer to restore a local backup if one exists and no cloud job is set.
+function checkRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const banner = document.getElementById('restore-banner');
+    if (banner) banner.style.display = 'flex';
+  } catch (e) { /* ignore */ }
+}
+
+function doRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    restoreState(state);
+  } catch(e) { console.error('Restore failed', e); }
+  dismissRestore();
+}
+
+function dismissRestore() {
+  const banner = document.getElementById('restore-banner');
+  if (banner) banner.style.display = 'none';
+}
+
 // ══ SUPABASE CLOUD SYNC ══
 const SUPABASE_URL = 'https://skbdamrynkzxdfjhmawj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrYmRhbXJ5bmt6eGRmamhtYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODU5MjAsImV4cCI6MjA5MTk2MTkyMH0.JSIr-FKc-u3vqEhFdDNVt_9Y_tKiRCSAguDM7H0LSOQ';
