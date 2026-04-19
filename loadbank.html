@@ -489,7 +489,7 @@ async function autoSaveLoadBank() {
       rows.push({ job_id: CURRENT_JOB_ID + '_lb', field_id: 'lb_field_' + k, field_value: String(v||''), updated_at: now });
     });
     rows.push({ job_id: CURRENT_JOB_ID + '_lb', field_id: 'lb_rows', field_value: JSON.stringify(state.rows), updated_at: now });
-    await sbFetch(TABLE, {
+    await sbFetch(TABLE + '?on_conflict=job_id,field_id', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify(rows)
