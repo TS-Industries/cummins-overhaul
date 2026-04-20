@@ -1284,6 +1284,70 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
 <script>
 const PASS_C='#065F46', FAIL_C='#991B1B', GOLD='#D97706';
 
+// ── Job ID UI (injected into header) ──
+function injectJobUI() {
+  const header = document.querySelector('.header-inner');
+  if (!header) return;
+  const jobDiv = document.createElement('div');
+  jobDiv.className = 'header-job';
+  jobDiv.innerHTML = `
+    <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,0.6);">JOB #</label>
+    <input id="job-id-input" type="text" placeholder="e.g. TSI-2025-001"
+      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;max-width:45vw;">
+    <button onclick="loadJob()" style="background:var(--gold);color:var(--navy);border:none;border-radius:5px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">LOAD</button>
+    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.5);font-family:'Barlow',sans-serif;flex-basis:100%;text-align:center;"></span>
+  `;
+  header.insertBefore(jobDiv, header.firstChild);
+  const lastJob = localStorage.getItem('tsi_last_job_id');
+  if (lastJob) {
+    const el = document.getElementById('job-id-input');
+    if (el) el.value = lastJob;
+  }
+}
+
+// ── Wire every input to trigger debounced autosave ──
+function attachAutoSaveListeners() {
+  const handler = () => { if (typeof autoSave === 'function') autoSave(); };
+  document.querySelectorAll('input, select, textarea').forEach(el => {
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+  // Pass/Fail buttons use classList changes — catch those via delegation
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.id && (t.id.startsWith('pass-') || t.id.startsWith('fail-'))) {
+      setTimeout(handler, 0);
+    }
+  });
+}
+
+// ── Check for unsaved local backup on startup ──
+function checkRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const banner = document.getElementById('restore-banner');
+    if (banner) banner.style.display = 'flex';
+  } catch(e) { /* ignore */ }
+}
+
+function doRestore() {
+  try {
+    const raw = localStorage.getItem('tsi_cummins_83g_v5');
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (typeof restoreState === 'function') restoreState(state);
+  } catch(e) { console.error('Restore failed', e); }
+  dismissRestore();
+}
+
+function dismissRestore() {
+  const banner = document.getElementById('restore-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+
 // ══ SECTION 1 — CRANKSHAFT ══
 const sec1Meas=[
   // Con Rod Journal Diameters
@@ -2407,21 +2471,69 @@ function openLightbox_report(src){
 }
 
 
-// ══ STATE COLLECT / RESTORE / AUTO-SAVE (required by init) ══
+// ══ STATE COLLECT / RESTORE / AUTO-SAVE (hardened) ══
+//
+// Defense layers against data loss:
+//  1. SAVES SUSPENDED while loading/restoring. No race windows.
+//  2. DATA-LOSS PREVENTION: before pushing, compare to current DB state.
+//     If save would blank 5+ existing non-empty values, REFUSE.
+//  3. AUDIT HISTORY: every save snapshots into overhaul_data_history.
+//     Recoverable even if something slips past the other defenses.
 
-let _isRestoring = false;   // true while we're rehydrating the form; blocks autoSave feedback loops
+const HISTORY_TABLE = 'overhaul_data_history';
+const BLANK_OVERWRITE_REFUSE_COUNT = 5; // refuse save that blanks this many existing non-empty values
 
-// Gather the full form state into a plain object.
+// ── Supabase connection ──
+const SUPABASE_URL = 'https://skbdamrynkzxdfjhmawj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrYmRhbXJ5bmt6eGRmamhtYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODU5MjAsImV4cCI6MjA5MTk2MTkyMH0.JSIr-FKc-u3vqEhFdDNVt_9Y_tKiRCSAguDM7H0LSOQ';
+const TABLE = 'overhaul_data';
+let CURRENT_JOB_ID = null;
+
+// Wrapper for all Supabase REST calls — auth headers applied last so caller options
+// can't accidentally clobber them.
+async function sbFetch(path, options = {}) {
+  const { headers: callerHeaders = {}, ...rest } = options;
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    ...rest,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...callerHeaders
+    }
+  });
+  return res;
+}
+
+let _savesSuspended = false;    // hard suspend (during load/restore) — no saves at all
+let _lastServerSnapshot = null; // last-known DB state for this job, {field_id: field_value}
+let _syncTimer = null;          // debounce handle for autoSave
+
+// ── helpers ──
+// A value is "blank" only if it's null/undefined or empty string.
+// DO NOT treat '0' or 'false' as blank — those are legitimate checkbox/meas values.
+function isBlank(v) {
+  return v === null || v === undefined || v === '';
+}
+// "meaningfully present": non-blank strings
+function isPresent(v) {
+  return !(v === null || v === undefined || v === '');
+}
+// A value is a real measurement or note (text a user would type).
+// Used by the save guard: losing measurements is catastrophic, losing other stuff is annoying.
+function isCriticalField(fid) {
+  return fid.startsWith('meas_val_') || fid.startsWith('meas_note_') || fid.startsWith('notes_') || fid.startsWith('meta_');
+}
+
+// ── COLLECT STATE ──
 function collectState() {
   const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{} };
 
-  // Meta fields
   ['wo','serial','model','unit','customer','tech','date','hours'].forEach(k => {
     const el = document.getElementById('uf-'+k);
     if (el) state.meta[k] = el.value || '';
   });
 
-  // Measurement rows (value + note per row id)
   const allMeas = [...sec1Meas,...sec2Meas,...sec3Meas,...sec4Meas,...sec5Meas,...sec7Meas,...sec8Meas];
   allMeas.forEach(r => {
     const v = document.getElementById('val-'+r.id);
@@ -2429,7 +2541,6 @@ function collectState() {
     if (v || n) state.meas[r.id] = { value: v ? v.value : '', note: n ? n.value : '' };
   });
 
-  // Visual inspection (pass / fail / pending)
   const viDefs = [
     {prefix:'vi1',items:viSec1},{prefix:'vi2',items:viSec2},{prefix:'vi3',items:viSec3},
     {prefix:'vi4',items:viSec4},{prefix:'vi5',items:viSec5},{prefix:'vi7',items:viSec7},
@@ -2447,18 +2558,14 @@ function collectState() {
     });
   });
 
-  // Bolt checkboxes
   document.querySelectorAll('[id^="bolt-"]').forEach(el => {
     if (el.type === 'checkbox') state.bolts[el.id.replace('bolt-','')] = el.checked;
   });
 
-  // Notes (section-level textareas, if any)
   document.querySelectorAll('[id^="notes-"]').forEach(el => {
     state.notes[el.id.replace('notes-','')] = el.value || '';
   });
 
-  // Photos — map of field id -> array of public URLs.
-  // Include ids that have been emptied this session so the deletion syncs.
   state.photos = {};
   const allIds = new Set([...Object.keys(photoStore), ...photoFieldsSeen]);
   allIds.forEach(k => {
@@ -2469,202 +2576,153 @@ function collectState() {
   return state;
 }
 
-// Apply a loaded state back onto the form.
+// Flatten state into the field_id/field_value pairs we push to the DB.
+function flattenState(state) {
+  const flat = {};
+  Object.entries(state.meta||{}).forEach(([k,v]) => flat['meta_'+k] = v);
+  Object.entries(state.meas||{}).forEach(([id,data]) => {
+    flat['meas_val_'+id]  = data.value || '';
+    flat['meas_note_'+id] = data.note  || '';
+  });
+  Object.entries(state.vi||{}).forEach(([id,v])    => flat['vi_'+id]     = v);
+  Object.entries(state.bolts||{}).forEach(([p,v])  => flat['bolt_'+p]    = v ? '1' : '0');
+  Object.entries(state.notes||{}).forEach(([s,v])  => flat['notes_'+s]   = v);
+  Object.entries(state.photos||{}).forEach(([id,u])=> flat['photos_'+id] = JSON.stringify(u || []));
+  return flat;
+}
+
+// ── RESTORE STATE ──
 function restoreState(state) {
   if (!state) return;
-  _isRestoring = true;
+  _savesSuspended = true;
   try {
+    Object.entries(state.meta || {}).forEach(([k,v]) => {
+      const el = document.getElementById('uf-'+k);
+      if (el) el.value = v || '';
+    });
 
-  // Meta
-  Object.entries(state.meta || {}).forEach(([k,v]) => {
-    const el = document.getElementById('uf-'+k);
-    if (el) el.value = v || '';
-  });
+    Object.entries(state.meas || {}).forEach(([id,data]) => {
+      const v = document.getElementById('val-'+id);
+      const n = document.getElementById('note-'+id);
+      if (v) v.value = data.value || '';
+      if (n) n.value = data.note || '';
+    });
 
-  // Measurements — directly set + call validator instead of dispatching input
-  // (dispatching input triggers autoSave which would then overwrite Supabase with partial state)
-  Object.entries(state.meas || {}).forEach(([id,data]) => {
-    const v = document.getElementById('val-'+id);
-    const n = document.getElementById('note-'+id);
-    if (v) v.value = data.value || '';
-    if (n) n.value = data.note || '';
-  });
+    // Re-run validators (no input events — we don't want to trigger saves)
+    const allMeasV = [...sec1Meas,...sec2Meas,...sec3Meas,...sec4Meas,...sec5Meas,...sec7Meas,...sec8Meas];
+    allMeasV.forEach(r => {
+      if (typeof validateMeas === 'function') validateMeas(r.id, r.min, r.max);
+    });
 
-  // Re-run validation for every measurement so PASS/FAIL status updates
-  const allMeasForValidate = [...(typeof sec1Meas!=='undefined'?sec1Meas:[]),
-                              ...(typeof sec2Meas!=='undefined'?sec2Meas:[]),
-                              ...(typeof sec3Meas!=='undefined'?sec3Meas:[]),
-                              ...(typeof sec4Meas!=='undefined'?sec4Meas:[]),
-                              ...(typeof sec5Meas!=='undefined'?sec5Meas:[]),
-                              ...(typeof sec7Meas!=='undefined'?sec7Meas:[]),
-                              ...(typeof sec8Meas!=='undefined'?sec8Meas:[])];
-  allMeasForValidate.forEach(r => {
-    if (typeof validateMeas === 'function') validateMeas(r.id, r.min, r.max);
-  });
+    Object.entries(state.vi || {}).forEach(([id, result]) => {
+      const pb = document.getElementById('pass-'+id);
+      const fb = document.getElementById('fail-'+id);
+      if (pb) pb.classList.remove('selected-pass');
+      if (fb) fb.classList.remove('selected-fail');
+      if (result === 'pass' && pb) pb.classList.add('selected-pass');
+      if (result === 'fail' && fb) fb.classList.add('selected-fail');
+    });
 
-  // Visual inspection
-  Object.entries(state.vi || {}).forEach(([id, result]) => {
-    const pb = document.getElementById('pass-'+id);
-    const fb = document.getElementById('fail-'+id);
-    if (pb) pb.classList.remove('selected-pass');
-    if (fb) fb.classList.remove('selected-fail');
-    if (result === 'pass' && pb) pb.classList.add('selected-pass');
-    if (result === 'fail' && fb) fb.classList.add('selected-fail');
-  });
+    Object.entries(state.bolts || {}).forEach(([pos,v]) => {
+      const el = document.getElementById('bolt-'+pos);
+      if (el && el.type === 'checkbox') el.checked = !!v;
+    });
 
-  // Bolts
-  Object.entries(state.bolts || {}).forEach(([pos,v]) => {
-    const el = document.getElementById('bolt-'+pos);
-    if (el && el.type === 'checkbox') el.checked = !!v;
-  });
+    Object.entries(state.notes || {}).forEach(([s,v]) => {
+      const el = document.getElementById('notes-'+s);
+      if (el) el.value = v || '';
+    });
 
-  // Notes
-  Object.entries(state.notes || {}).forEach(([s,v]) => {
-    const el = document.getElementById('notes-'+s);
-    if (el) el.value = v || '';
-  });
+    Object.keys(photoStore).forEach(k => delete photoStore[k]);
+    photoFieldsSeen.clear();
+    Object.entries(state.photos || {}).forEach(([id, urls]) => {
+      if (Array.isArray(urls) && urls.length) {
+        photoStore[id] = urls.slice();
+        photoFieldsSeen.add(id);
+        renderPhotoThumbs(id);
+      }
+    });
 
-  // Photos
-  Object.keys(photoStore).forEach(k => delete photoStore[k]);
-  photoFieldsSeen.clear();
-  Object.entries(state.photos || {}).forEach(([id, urls]) => {
-    if (Array.isArray(urls) && urls.length) {
-      photoStore[id] = urls.slice();
-      photoFieldsSeen.add(id);
-      renderPhotoThumbs(id);
-    }
-  });
-
-  if (typeof updateProgress === 'function') updateProgress();
-
+    if (typeof updateProgress === 'function') updateProgress();
   } finally {
-    _isRestoring = false;
+    // Small delay before un-suspending so any stray events from restore
+    // (e.g. dispatched by validateMeas) are dropped, not saved.
+    setTimeout(() => { _savesSuspended = false; }, 500);
   }
 }
 
-// Attach change/input listeners to every data-bearing element so edits trigger autoSave.
-function attachAutoSaveListeners() {
-  // Any input, select, textarea under the main form area
-  const handler = () => { if (typeof autoSave === 'function') autoSave(); };
-  document.querySelectorAll('input, select, textarea').forEach(el => {
-    el.addEventListener('input', handler);
-    el.addEventListener('change', handler);
-  });
-  // Pass/Fail buttons use classList changes — we also catch their clicks
-  document.addEventListener('click', (e) => {
-    const t = e.target;
-    if (!t) return;
-    if (t.id && (t.id.startsWith('pass-') || t.id.startsWith('fail-'))) {
-      // let the original handler run, then save
-      setTimeout(handler, 0);
+// ── WRITE TO HISTORY TABLE (best-effort, append-only) ──
+async function appendHistory(jobId, flat, source) {
+  try {
+    const rows = Object.entries(flat)
+      .filter(([,v]) => v !== undefined && v !== null)
+      .map(([field_id, field_value]) => ({
+        job_id: jobId,
+        field_id,
+        field_value: String(field_value),
+        source
+      }));
+    if (!rows.length) return;
+    // Batches of 200
+    for (let i = 0; i < rows.length; i += 200) {
+      const batch = rows.slice(i, i + 200);
+      await sbFetch(HISTORY_TABLE, {
+        method: 'POST',
+        body: JSON.stringify(batch)
+      });
     }
-  });
-}
-
-// On load: offer to restore a local backup if one exists and no cloud job is set.
-function checkRestore() {
-  try {
-    const raw = localStorage.getItem('tsi_cummins_83g_v5');
-    if (!raw) return;
-    const banner = document.getElementById('restore-banner');
-    if (banner) banner.style.display = 'flex';
-  } catch (e) { /* ignore */ }
-}
-
-function doRestore() {
-  try {
-    const raw = localStorage.getItem('tsi_cummins_83g_v5');
-    if (!raw) return;
-    const state = JSON.parse(raw);
-    restoreState(state);
-  } catch(e) { console.error('Restore failed', e); }
-  dismissRestore();
-}
-
-function dismissRestore() {
-  const banner = document.getElementById('restore-banner');
-  if (banner) banner.style.display = 'none';
-}
-
-// ══ SUPABASE CLOUD SYNC ══
-const SUPABASE_URL = 'https://skbdamrynkzxdfjhmawj.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrYmRhbXJ5bmt6eGRmamhtYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODU5MjAsImV4cCI6MjA5MTk2MTkyMH0.JSIr-FKc-u3vqEhFdDNVt_9Y_tKiRCSAguDM7H0LSOQ';
-const TABLE = 'overhaul_data';
-let CURRENT_JOB_ID = null;
-let _syncTimer = null;
-
-// ── Job ID UI ──
-function injectJobUI() {
-  const header = document.querySelector('.header-inner');
-  if (!header) return;
-  const jobDiv = document.createElement('div');
-  jobDiv.className = 'header-job';
-  jobDiv.innerHTML = `
-    <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,0.6);">JOB #</label>
-    <input id="job-id-input" type="text" placeholder="e.g. TSI-2025-001"
-      style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:4px 10px;color:white;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;width:140px;max-width:45vw;">
-    <button onclick="loadJob()" style="background:var(--gold);color:var(--navy);border:none;border-radius:5px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">LOAD</button>
-    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.5);font-family:'Barlow',sans-serif;flex-basis:100%;text-align:center;"></span>
-  `;
-  // Insert job div as the FIRST child so it appears on the left (desktop)
-  // and at the top (mobile, via CSS order rules)
-  header.insertBefore(jobDiv, header.firstChild);
-  // Auto-load last job from localStorage
-  const lastJob = localStorage.getItem('tsi_last_job_id');
-  if (lastJob) {
-    document.getElementById('job-id-input').value = lastJob;
+  } catch (e) {
+    console.warn('History append failed (non-fatal):', e);
   }
 }
 
-// ── Supabase fetch helpers ──
-async function sbFetch(path, options={}) {
-  // Merge caller's options FIRST, then set our headers explicitly — so
-  // the spread doesn't overwrite apikey/Authorization/Content-Type.
-  const { headers: callerHeaders = {}, ...rest } = options;
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
-    ...rest,
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates',
-      ...callerHeaders
-    }
-  });
-  return res;
-}
-
-// ── Save all fields to Supabase ──
-async function syncToCloud(jobId, state) {
+// ── SAVE TO CLOUD (with data-loss guard) ──
+async function syncToCloud(jobId, state, opts = {}) {
   if (!jobId) return;
+  if (_savesSuspended && !opts.force) {
+    console.log('[save] suspended, skipping');
+    return;
+  }
+
+  const flat = flattenState(state);
+  const source = opts.source || 'autosave';
+
+  // LAYER 2: Data-loss guard.
+  // Critical fields (measurements, notes, meta) get a strict threshold — we
+  // refuse to blank even 1 of them. Non-critical fields (VI pending/pass/fail, bolts)
+  // use the looser count.
+  if (_lastServerSnapshot && !opts.force) {
+    let wouldBlankCritical = 0;
+    let wouldBlankTotal = 0;
+    const wouldBlankList = [];
+    for (const [fid, oldVal] of Object.entries(_lastServerSnapshot)) {
+      if (isPresent(oldVal) && isBlank(flat[fid])) {
+        wouldBlankTotal++;
+        if (isCriticalField(fid)) wouldBlankCritical++;
+        if (wouldBlankList.length < 10) wouldBlankList.push(`${fid}=${oldVal}`);
+      }
+    }
+    // STRICT: refuse if ANY critical field would be blanked
+    if (wouldBlankCritical >= 1 || wouldBlankTotal >= BLANK_OVERWRITE_REFUSE_COUNT) {
+      console.error('[save] REFUSED — would blank ' + wouldBlankTotal + ' values (' + wouldBlankCritical + ' critical):', wouldBlankList);
+      setSyncStatus('⚠ Save refused — would wipe ' + (wouldBlankCritical || wouldBlankTotal) + ' fields');
+      showDataGuardBanner(wouldBlankTotal, jobId, state);
+      return;
+    }
+  }
+
   setSyncStatus('Saving...');
-  const rows = [];
+
+  // Build the rows for overhaul_data
   const now = new Date().toISOString();
-  // Flatten all state into key/value rows
-  const flat = {};
-  // Meta
-  Object.entries(state.meta||{}).forEach(([k,v]) => flat['meta_'+k] = v);
-  // Measurements
-  Object.entries(state.meas||{}).forEach(([id,data]) => {
-    flat['meas_val_'+id] = data.value || '';
-    flat['meas_note_'+id] = data.note || '';
-  });
-  // VI
-  Object.entries(state.vi||{}).forEach(([id,v]) => flat['vi_'+id] = v);
-  // Bolts
-  Object.entries(state.bolts||{}).forEach(([pos,v]) => flat['bolt_'+pos] = v?'1':'0');
-  // Notes
-  Object.entries(state.notes||{}).forEach(([s,v]) => flat['notes_'+s] = v);
-  // Photos — store each field's URL array as a JSON string
-  Object.entries(state.photos||{}).forEach(([id, urls]) => {
-    flat['photos_'+id] = JSON.stringify(urls || []);
-  });
+  const rows = Object.entries(flat).map(([field_id, field_value]) => ({
+    job_id: jobId,
+    field_id,
+    field_value: String(field_value || ''),
+    updated_at: now
+  }));
 
-  Object.entries(flat).forEach(([field_id, field_value]) => {
-    rows.push({ job_id: jobId, field_id, field_value: String(field_value), updated_at: now });
-  });
-
-  // Upsert in batches of 100 — on_conflict tells PostgREST which unique key to merge against
+  // Upsert in batches of 100
   for (let i = 0; i < rows.length; i += 100) {
     const batch = rows.slice(i, i + 100);
     await sbFetch(TABLE + '?on_conflict=job_id,field_id', {
@@ -2673,28 +2731,81 @@ async function syncToCloud(jobId, state) {
       body: JSON.stringify(batch)
     });
   }
+
+  // Update our server-snapshot cache with what we just wrote
+  _lastServerSnapshot = { ...flat };
+
+  // LAYER 3: write to history (fire-and-forget, doesn't block UI)
+  appendHistory(jobId, flat, source);
+
   setSyncStatus('✓ Saved ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
 }
 
-// ── Load job from Supabase ──
+// ── DATA GUARD WARNING BANNER ──
+function showDataGuardBanner(wouldBlank, jobId, pendingState) {
+  let banner = document.getElementById('data-guard-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'data-guard-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#DC2626;color:white;padding:12px 20px;font-family:Barlow,sans-serif;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `
+    ⚠ <strong>SAVE BLOCKED:</strong> Attempting to wipe ${wouldBlank} existing values.
+    Your data on the server is SAFE. Click LOAD to restore, or
+    <button onclick="dismissGuardBanner()" style="margin-left:10px;background:white;color:#DC2626;border:none;padding:4px 12px;border-radius:4px;font-weight:700;cursor:pointer;">Dismiss</button>
+    <button onclick="forceNextSave()" style="margin-left:6px;background:#991B1B;color:white;border:1px solid white;padding:4px 12px;border-radius:4px;font-weight:700;cursor:pointer;">I really mean it — wipe anyway</button>
+  `;
+}
+function dismissGuardBanner() {
+  const b = document.getElementById('data-guard-banner');
+  if (b) b.remove();
+}
+async function forceNextSave() {
+  dismissGuardBanner();
+  if (!CURRENT_JOB_ID) return;
+  if (!confirm('You are about to overwrite existing values with blanks. This is usually a mistake. Proceed?')) return;
+  await syncToCloud(CURRENT_JOB_ID, collectState(), { force: true, source: 'manual-force' });
+}
+
+// ── LOAD JOB ──
 async function loadJob() {
   const input = document.getElementById('job-id-input');
   const jobId = input ? input.value.trim() : '';
   if (!jobId) { alert('Enter a job number first.'); return; }
+
+  // If switching to a different job, warn that the current form will be replaced
+  if (CURRENT_JOB_ID && CURRENT_JOB_ID !== jobId) {
+    if (!confirm(`Switch from job "${CURRENT_JOB_ID}" to "${jobId}"?\n\nAny unsaved changes on the current form will be replaced with "${jobId}" data (or cleared if it's a new job).`)) {
+      return;
+    }
+  }
+
+  // Flush any pending save FIRST so we don't race a stale save after we switch jobs.
+  clearTimeout(_syncTimer);
+
+  _savesSuspended = true;
   CURRENT_JOB_ID = jobId;
   localStorage.setItem('tsi_last_job_id', jobId);
   setSyncStatus('Loading...');
+
   try {
     const res = await sbFetch(TABLE + '?job_id=eq.' + encodeURIComponent(jobId) + '&limit=2000');
     const rows = await res.json();
-    if (!rows || rows.length === 0) {
-      setSyncStatus('New job — ready');
+
+    if (!Array.isArray(rows)) {
+      setSyncStatus('Load failed — see console');
+      console.error('Load response not an array:', rows);
+      _savesSuspended = false;
       return;
     }
-    // Rebuild state from rows
+
+    // Build snapshot + state
+    const snapshot = {};
     const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{} };
     rows.forEach(row => {
       const { field_id, field_value } = row;
+      snapshot[field_id] = field_value;
       if (field_id.startsWith('meta_')) {
         state.meta[field_id.replace('meta_','')] = field_value;
       } else if (field_id.startsWith('meas_val_')) {
@@ -2716,15 +2827,30 @@ async function loadJob() {
         try {
           const urls = JSON.parse(field_value || '[]');
           if (Array.isArray(urls) && urls.length) state.photos[id] = urls;
-        } catch(e) { /* ignore malformed */ }
+        } catch(e) { /* ignore */ }
       }
     });
-    restoreState(state);
-    setSyncStatus('✓ Loaded');
+
+    // Cache snapshot for the data-loss guard
+    _lastServerSnapshot = snapshot;
+
+    if (rows.length === 0) {
+      // New/empty job — clear the form so we don't carry over the previous job's data
+      // into this one on the next autosave.
+      restoreState({ meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{} });
+      setSyncStatus('New job — ready (form cleared)');
+    } else {
+      restoreState(state); // this will re-suspend saves internally; we un-suspend after
+      setSyncStatus('✓ Loaded ' + rows.filter(r => isPresent(r.field_value)).length + ' values');
+    }
+
   } catch(e) {
     setSyncStatus('Load failed');
-    console.error(e);
+    console.error('Load error:', e);
   }
+
+  // restoreState handles its own un-suspend; if it didn't run, un-suspend here
+  setTimeout(() => { _savesSuspended = false; }, 700);
 }
 
 function setSyncStatus(msg) {
@@ -2732,27 +2858,43 @@ function setSyncStatus(msg) {
   if (el) el.textContent = msg;
 }
 
-// ── Auto-sync override ──
+// ── AUTO-SAVE (debounced, suspend-aware) ──
 function autoSave() {
-  if (_isRestoring) return;   // don't push back to cloud while we're rehydrating form
+  if (_savesSuspended) return;
   clearTimeout(_syncTimer);
   setSyncStatus('Saving...');
   _syncTimer = setTimeout(async () => {
-    if (_isRestoring) return;
+    if (_savesSuspended) return;
     if (!CURRENT_JOB_ID) {
-      // Fall back to localStorage if no job ID
-      try {
-        const state = collectState();
-        localStorage.setItem('tsi_cummins_83g_v5', JSON.stringify(state));
-        setSyncStatus('Saved locally (no job #)');
-      } catch(e) {}
+      // No active job. Check if user has typed a Job # but hasn't LOADed it yet.
+      const input = document.getElementById('job-id-input');
+      const typed = input ? input.value.trim() : '';
+      if (typed) {
+        setSyncStatus('⚠ Click LOAD to start syncing "' + typed + '"');
+      } else {
+        // Genuinely no job — fall back to localStorage for browser-recovery
+        try {
+          const state = collectState();
+          localStorage.setItem('tsi_cummins_83g_v5', JSON.stringify(state));
+          setSyncStatus('Saved locally (no job # entered)');
+        } catch(e) {}
+      }
+      return;
+    }
+    // SAFETY: if a job is active but we have no server snapshot, refuse.
+    if (_lastServerSnapshot === null) {
+      setSyncStatus('⚠ Click LOAD first — no snapshot to compare against');
       return;
     }
     const state = collectState();
-    await syncToCloud(CURRENT_JOB_ID, state);
+    await syncToCloud(CURRENT_JOB_ID, state, { source: 'autosave' });
   }, 1500);
 }
 
 // Periodic cloud sync every 30 seconds
-setInterval(()=>{ if(CURRENT_JOB_ID && !_isRestoring){ collectState && syncToCloud(CURRENT_JOB_ID, collectState()); } },30000);
+setInterval(() => {
+  if (CURRENT_JOB_ID && !_savesSuspended && _lastServerSnapshot !== null) {
+    syncToCloud(CURRENT_JOB_ID, collectState(), { source: 'periodic' });
+  }
+}, 30000);
 </script>
