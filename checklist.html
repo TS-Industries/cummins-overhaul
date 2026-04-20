@@ -1228,25 +1228,7 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
       </div>
       <!-- FLAGGED ITEMS PANEL -->
       <div id="flagged-panel-wrap"></div>
-      <!-- CHARTS ROW 1: Donut + Bar -->
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title">Overall Inspection Result</div>
-          <div class="chart-canvas-wrap"><canvas id="chart-donut"></canvas></div>
-          <div class="gauge-row" id="gauge-row"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">Pass / Fail by Section</div>
-          <div class="chart-canvas-wrap"><canvas id="chart-bar"></canvas></div>
-        </div>
-      </div>
-      <!-- CHART ROW 2: Measurement Heatmap -->
-      <div class="chart-card-wide">
-        <div class="chart-title">Measurement Status Heatmap</div>
-        <div id="heatmap-container"></div>
-      </div>
-      <div class="report-section-title">Section Scorecards</div>
-      <div class="scorecard-grid" id="rpt-scorecard"></div>
+
       <div class="report-section-title">Measurement Details</div>
       <table class="report-meas-table">
         <thead><tr><th>Section</th><th>Measurement</th><th>Spec</th><th>Actual</th><th>Status</th><th>Notes</th></tr></thead>
@@ -1991,22 +1973,6 @@ function openReport(){
   else if(pass===total){banner.className='report-status-banner approved';banner.textContent='✓ ALL MEASUREMENTS PASS — APPROVED FOR SERVICE';}
   else if(pass>0){banner.className='report-status-banner progress';banner.textContent=`IN PROGRESS — ${pass}/${total} MEASUREMENTS COMPLETE`;}
   else{banner.className='report-status-banner incomplete';banner.textContent='CHECKLIST NOT YET STARTED';}
-  // Scorecard
-  const sc=document.getElementById('rpt-scorecard');
-  sc.innerHTML='';
-  sectionDefs.forEach(def=>{
-    const mArr=def.meas();
-    let sp=0,sf=0;
-    mArr.forEach(r=>{
-      const s=document.getElementById('stat-'+r.id);
-      if(!s) return;
-      if(s.classList.contains('status-pass')) sp++;
-      else if(s.classList.contains('status-fail')) sf++;
-    });
-    const pct=mArr.length>0?Math.round(((sp+sf)/mArr.length)*100):0;
-    const cls=sf>0?'sc-fail':sp===mArr.length&&mArr.length>0?'sc-pass':'sc-gray';
-    sc.innerHTML+=`<div class="scorecard ${cls}"><div class="scorecard-title">${def.title}</div><div class="scorecard-pct">${pct}%</div><div class="scorecard-counts">${sp} pass / ${sf} fail</div></div>`;
-  });
   // Meas table — grouped by section with divider rows
   const mt=document.getElementById('rpt-meas-tbody');
   mt.innerHTML='';
@@ -2078,8 +2044,6 @@ function openReport(){
   buildFlaggedPanel(sectionDefs);
   // Photo gallery
   buildPhotoGallery(sectionDefs);
-  // Charts
-  renderCharts(pass,fail,total,sectionDefs);
   // AI summary
   generateAISummary(allMeas,pass,fail,total);
   document.getElementById('report-overlay').classList.add('open');
@@ -2363,6 +2327,111 @@ async function deleteCurrentPhoto() {
 }
 
 // ══ FLAGGED ITEMS PANEL ══
+// ══ PARTS INSTALLED SUMMARY (customer-facing analytics) ══
+function buildPartsSummary(){
+  const wrap = document.getElementById('rpt-parts-summary');
+  if (!wrap) return;
+
+  // Collect all parts from the form
+  const parts = [];
+  for (let i = 1; i <= partRowId; i++) {
+    const row = document.getElementById('part-row-'+i);
+    if (!row) continue;
+    const desc = document.getElementById('part-desc-'+i);
+    if (!desc || !desc.value) continue;
+    parts.push({
+      desc: desc.value,
+      partNum: document.getElementById('part-num-'+i)?.value || '',
+      qty: document.getElementById('part-qty-'+i)?.value || '1',
+      supplier: document.getElementById('part-sup-'+i)?.value || '',
+      condition: document.getElementById('part-cond-'+i)?.value || '',
+      note: document.getElementById('part-note-'+i)?.value || ''
+    });
+  }
+
+  if (!parts.length) {
+    wrap.innerHTML = `<div style="padding:1rem;background:#F9FAFB;border:1px dashed var(--border);border-radius:6px;color:var(--gray);font-size:12px;text-align:center;">No parts recorded yet.</div>`;
+    return;
+  }
+
+  // Categorize parts by keyword matching in description
+  const categories = {
+    'Bearings': { icon:'⚙️', keywords:['bearing','shell','thrust washer'], items:[] },
+    'Seals & Gaskets': { icon:'🛡️', keywords:['seal','gasket','o-ring','oring'], items:[] },
+    'Hardware': { icon:'🔩', keywords:['bolt','stud','capscrew','nut','washer','screw','pin'], items:[] },
+    'Fluids & Consumables': { icon:'🧪', keywords:['oil','filter','coolant','lubricant','rtv','thread sealant','anti-seize'], items:[] },
+    'Other': { icon:'📦', keywords:[], items:[] }
+  };
+
+  parts.forEach(p => {
+    const lower = p.desc.toLowerCase();
+    let placed = false;
+    for (const [name, cat] of Object.entries(categories)) {
+      if (name === 'Other') continue;
+      if (cat.keywords.some(kw => lower.includes(kw))) {
+        cat.items.push(p);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) categories.Other.items.push(p);
+  });
+
+  // Summary header
+  const totalQty = parts.reduce((sum, p) => sum + (parseInt(p.qty) || 1), 0);
+  const uniqueCount = parts.length;
+
+  let html = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:1rem;">
+      <div style="background:var(--navy);color:white;padding:1rem;border-radius:8px;text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--gold);margin-bottom:.25rem;">TOTAL PARTS INSTALLED</div>
+        <div style="font-size:32px;font-weight:800;line-height:1;">${totalQty}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:.25rem;">${uniqueCount} unique items</div>
+      </div>
+      <div style="background:#FEF3C7;border:1px solid var(--gold);padding:1rem;border-radius:8px;text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--navy);margin-bottom:.25rem;">CATEGORIES</div>
+        <div style="font-size:32px;font-weight:800;line-height:1;color:var(--navy);">${Object.values(categories).filter(c=>c.items.length>0).length}</div>
+        <div style="font-size:10px;color:var(--gray);margin-top:.25rem;">Part types installed</div>
+      </div>
+      <div style="background:var(--pass-bg);border:1px solid var(--pass);padding:1rem;border-radius:8px;text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--pass);margin-bottom:.25rem;">NEW INSTALL</div>
+        <div style="font-size:32px;font-weight:800;line-height:1;color:var(--pass);">${parts.filter(p=>(p.condition||'').toLowerCase()==='new').length || parts.length}</div>
+        <div style="font-size:10px;color:var(--gray);margin-top:.25rem;">Factory-new parts</div>
+      </div>
+    </div>
+  `;
+
+  // Category cards
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">`;
+  for (const [name, cat] of Object.entries(categories)) {
+    if (!cat.items.length) continue;
+    const catQty = cat.items.reduce((sum, p) => sum + (parseInt(p.qty) || 1), 0);
+    html += `
+      <div style="background:white;border:1.5px solid var(--border);border-radius:8px;padding:.875rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;padding-bottom:.5rem;border-bottom:2px solid var(--gold);margin-bottom:.625rem;">
+          <span style="font-size:18px;">${cat.icon}</span>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--navy);flex:1;">${name}</div>
+          <div style="background:var(--navy);color:var(--gold);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">${catQty}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.4rem;">
+          ${cat.items.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;padding:.375rem 0;border-bottom:1px dashed #E5E7EB;">
+              <div style="flex:1;">
+                <div style="font-size:12px;font-weight:600;color:var(--dark);">${p.desc}</div>
+                ${p.partNum ? `<div class="mono" style="font-size:10px;color:var(--gray);margin-top:1px;">P/N: ${p.partNum}</div>` : ''}
+              </div>
+              <div style="font-size:11px;font-weight:700;color:var(--navy);white-space:nowrap;">×${p.qty}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  html += `</div>`;
+
+  wrap.innerHTML = html;
+}
+
 function buildFlaggedPanel(sectionDefs){
   const wrap=document.getElementById('flagged-panel-wrap');
   if(!wrap) return;
@@ -2573,6 +2642,26 @@ function collectState() {
     state.photos[k] = (Array.isArray(arr) && arr.length) ? arr.slice() : [];
   });
 
+  // Parts — serialize the whole list as one array (rows grow/shrink, not a fixed schema)
+  state.parts = [];
+  for (let i = 1; i <= partRowId; i++) {
+    const row = document.getElementById('part-row-'+i);
+    if (!row) continue;
+    const desc = document.getElementById('part-desc-'+i);
+    const part = {
+      desc:    desc ? desc.value : '',
+      partNum: document.getElementById('part-num-'+i)?.value  || '',
+      qty:     document.getElementById('part-qty-'+i)?.value  || '',
+      sup:     document.getElementById('part-sup-'+i)?.value  || '',
+      cond:    document.getElementById('part-cond-'+i)?.value || '',
+      note:    document.getElementById('part-note-'+i)?.value || ''
+    };
+    // Only save rows that have at least something in them
+    if (part.desc || part.partNum || part.qty || part.sup || part.cond || part.note) {
+      state.parts.push(part);
+    }
+  }
+
   return state;
 }
 
@@ -2588,6 +2677,8 @@ function flattenState(state) {
   Object.entries(state.bolts||{}).forEach(([p,v])  => flat['bolt_'+p]    = v ? '1' : '0');
   Object.entries(state.notes||{}).forEach(([s,v])  => flat['notes_'+s]   = v);
   Object.entries(state.photos||{}).forEach(([id,u])=> flat['photos_'+id] = JSON.stringify(u || []));
+  // Parts list serialized as a single JSON string
+  flat['parts_list'] = JSON.stringify(state.parts || []);
   return flat;
 }
 
@@ -2642,6 +2733,31 @@ function restoreState(state) {
         renderPhotoThumbs(id);
       }
     });
+
+    // Parts — clear existing rows, then recreate from saved state
+    const partsTbody = document.getElementById('parts-tbody');
+    if (partsTbody) partsTbody.innerHTML = '';
+    partRowId = 0;
+    const partsArr = Array.isArray(state.parts) ? state.parts : [];
+    if (partsArr.length === 0) {
+      // No saved parts — give user 3 empty rows to start with
+      addPartsRow(); addPartsRow(); addPartsRow();
+    } else {
+      partsArr.forEach(p => {
+        addPartsRow();
+        const id = partRowId;
+        const set = (field, val) => {
+          const el = document.getElementById('part-'+field+'-'+id);
+          if (el) el.value = val || '';
+        };
+        set('desc', p.desc);
+        set('num',  p.partNum);
+        set('qty',  p.qty);
+        set('sup',  p.sup);
+        set('cond', p.cond);
+        set('note', p.note);
+      });
+    }
 
     if (typeof updateProgress === 'function') updateProgress();
   } finally {
@@ -2802,7 +2918,7 @@ async function loadJob() {
 
     // Build snapshot + state
     const snapshot = {};
-    const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{} };
+    const state = { meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{}, parts:[] };
     rows.forEach(row => {
       const { field_id, field_value } = row;
       snapshot[field_id] = field_value;
@@ -2828,6 +2944,11 @@ async function loadJob() {
           const urls = JSON.parse(field_value || '[]');
           if (Array.isArray(urls) && urls.length) state.photos[id] = urls;
         } catch(e) { /* ignore */ }
+      } else if (field_id === 'parts_list') {
+        try {
+          const list = JSON.parse(field_value || '[]');
+          if (Array.isArray(list)) state.parts = list;
+        } catch(e) { /* ignore */ }
       }
     });
 
@@ -2837,7 +2958,7 @@ async function loadJob() {
     if (rows.length === 0) {
       // New/empty job — clear the form so we don't carry over the previous job's data
       // into this one on the next autosave.
-      restoreState({ meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{} });
+      restoreState({ meta:{}, meas:{}, vi:{}, bolts:{}, notes:{}, photos:{}, parts:[] });
       setSyncStatus('New job — ready (form cleared)');
     } else {
       restoreState(state); // this will re-suspend saves internally; we un-suspend after
