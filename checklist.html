@@ -1839,6 +1839,7 @@ function updateProgress(){
     {prefix:'vi4',count:viSec4.length},
     {prefix:'vi5',count:viSec5.length},
     {prefix:'vi7',count:viSec7.length},
+    {prefix:'vi8',count:viSec8.length},
   ];
   viDefs.forEach(({prefix,count})=>{
     for(let i=0;i<count;i++){
@@ -1919,7 +1920,8 @@ function saveJSON(){
   });
   const viDefs=[
     {prefix:'vi1',items:viSec1},{prefix:'vi2',items:viSec2},{prefix:'vi3',items:viSec3},
-    {prefix:'vi4',items:viSec4},{prefix:'vi5',items:viSec5},{prefix:'vi7',items:viSec7}
+    {prefix:'vi4',items:viSec4},{prefix:'vi5',items:viSec5},{prefix:'vi7',items:viSec7},
+    {prefix:'vi8',items:viSec8}
   ];
   viDefs.forEach(({prefix,items})=>{
     items.forEach((label,i)=>{
@@ -1952,7 +1954,7 @@ function saveJSON(){
   a.href=URL.createObjectURL(blob);
   const wo=data.meta.wo||'WO';
   const dt=new Date().toISOString().slice(0,10);
-  a.download=`TSI_8_3G_${wo}_${dt}.json`;
+  a.download=`${wo||'NoWO'}_Checklist.json`;
   a.click();
 }
 
@@ -2018,6 +2020,7 @@ function openReport(){
     {prefix:'vi4',items:viSec4,title:'Cylinder Liner'},
     {prefix:'vi5',items:viSec5,title:'Cylinder Head'},
     {prefix:'vi7',items:viSec7,title:'Valvetrain'},
+    {prefix:'vi8',items:viSec8,title:'Oil Pump'},
   ];
   viDefsR.forEach(({prefix,items,title})=>{
     // Collect findings for this section first, only render the header if there are any
@@ -2494,6 +2497,7 @@ function buildPhotoGallery(sectionDefs){
     {prefix:'vi4',items:viSec4,title:'Cylinder Liner'},
     {prefix:'vi5',items:viSec5,title:'Cylinder Head'},
     {prefix:'vi7',items:viSec7,title:'Valvetrain'},
+    {prefix:'vi8',items:viSec8,title:'Oil Pump'},
   ];
 
   sectionDefs.forEach((def,si)=>{
