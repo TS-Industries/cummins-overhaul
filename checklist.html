@@ -556,8 +556,7 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
         <div id="proc-2-specs" class="proc-content active">
           <div class="proc-title">Main Bearing Specifications — Manual 3666206</div>
           <div class="spec-grid">
-            <div class="spec-card primary"><div class="spec-label">Bearing Shell Thickness — MIN</div><div class="spec-value">0.1357<span class="spec-unit">in</span></div><div class="spec-sub">3.446 mm</div></div>
-            <div class="spec-card primary"><div class="spec-label">Bearing Shell Thickness — MAX</div><div class="spec-value">0.1360<span class="spec-unit">in</span></div><div class="spec-sub">3.454 mm</div></div>
+            <div class="spec-card"><div class="spec-label">New Bearing Shell Thickness</div><div class="spec-value" style="font-size:16px;">Record as-built</div><div class="spec-sub">New bearings installed every overhaul — record actual thickness for reference</div></div>
             <div class="spec-card"><div class="spec-label">Thrust Bearing Flange — MIN</div><div class="spec-value">0.139<span class="spec-unit">in</span></div><div class="spec-sub">3.52 mm</div></div>
             <div class="spec-card"><div class="spec-label">Thrust Bearing Flange — MAX</div><div class="spec-value">0.141<span class="spec-unit">in</span></div><div class="spec-sub">3.57 mm</div></div>
             <div class="spec-card"><div class="spec-label">Crankshaft End Play — MIN</div><div class="spec-value">0.005<span class="spec-unit">in</span></div><div class="spec-sub">0.127 mm</div></div>
@@ -590,7 +589,7 @@ body{font-family:'Barlow',sans-serif;background:#0F1A24;color:var(--dark);min-he
             <li>Mark all bearing caps for location before removal. Caps are numbered — do NOT pry caps off. Use two cap bolts to "walk" caps off.</li>
             <li>Clean cap, block saddle, and bearing shells with solvent. Use Scotch-Brite 7448 on seating surfaces. Do NOT use wire brush on bearings.</li>
             <li>Inspect bearing shells for pitting, flaking, corrosion, lock tang damage, or deep scratches. Replace as a set if any damage found.</li>
-            <li>Measure bearing shell thickness. MIN: 3.446 mm [0.1357 in]. Discard if below minimum.</li>
+            <li>Install NEW bearing shells (std or undersize to match journal). Record the new bearing thickness for reference.</li>
             <li>Install upper bearing shells (with oil holes) into block saddles. Install lower shells (no holes) into caps.</li>
             <li>Install #4 flanged thrust bearing with oil hole facing up.</li>
             <li>Lubricate bearing shells with clean engine oil before installing crankshaft.</li>
@@ -1384,13 +1383,13 @@ const sec1Meas=[
 
 // ══ SECTION 2 — MAIN BEARINGS ══
 const sec2Meas=[
-  {id:'s2-shell-1',  label:'Main Bearing Shell Thickness #1',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 1', group:'Bearing Shell Thickness'},
-  {id:'s2-shell-2',  label:'Main Bearing Shell Thickness #2',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 2', group:null},
-  {id:'s2-shell-3',  label:'Main Bearing Shell Thickness #3',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 3', group:null},
-  {id:'s2-shell-4',  label:'Main Bearing Shell Thickness #4',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 4', group:null},
-  {id:'s2-shell-5',  label:'Main Bearing Shell Thickness #5',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 5', group:null},
-  {id:'s2-shell-6',  label:'Main Bearing Shell Thickness #6',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 6', group:null},
-  {id:'s2-shell-7',  label:'Main Bearing Shell Thickness #7',spec:'0.1357–0.1360"',min:0.1357,max:0.1360,loc:'Cap 7', group:null},
+  {id:'s2-shell-1',  label:'New Main Bearing Thickness #1',spec:'', min:null, max:null, loc:'Cap 1', group:'New Bearing Shell Thickness (record only)'},
+  {id:'s2-shell-2',  label:'New Main Bearing Thickness #2',spec:'', min:null, max:null, loc:'Cap 2', group:null},
+  {id:'s2-shell-3',  label:'New Main Bearing Thickness #3',spec:'', min:null, max:null, loc:'Cap 3', group:null},
+  {id:'s2-shell-4',  label:'New Main Bearing Thickness #4',spec:'', min:null, max:null, loc:'Cap 4', group:null},
+  {id:'s2-shell-5',  label:'New Main Bearing Thickness #5',spec:'', min:null, max:null, loc:'Cap 5', group:null},
+  {id:'s2-shell-6',  label:'New Main Bearing Thickness #6',spec:'', min:null, max:null, loc:'Cap 6', group:null},
+  {id:'s2-shell-7',  label:'New Main Bearing Thickness #7',spec:'', min:null, max:null, loc:'Cap 7', group:null},
   // Dial Bore Gauge — Bore ID with shell installed (torqued caps)
   {id:'s2-bore-1',   label:'Main Bore ID w/ Shell — #1',     spec:'Record bore ID', min:null,  max:null,  loc:'Journal 1',          group:'Bore ID — Dial Bore Gauge (Shell Installed, Caps Torqued)'},
   {id:'s2-bore-2',   label:'Main Bore ID w/ Shell — #2',     spec:'Record bore ID', min:null,  max:null,  loc:'Journal 2',          group:null},
@@ -1988,7 +1987,17 @@ function openReport(){
     if(!mArr || !mArr.length) return;
     // Section divider row
     mt.innerHTML+=`<tr class="rpt-section-row"><td colspan="6" style="background:var(--navy);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;padding:.6rem .75rem;border-top:2px solid var(--gold);border-bottom:1px solid var(--gold);">${def.id}. ${def.title}</td></tr>`;
+    let currentGroup = null;
     mArr.forEach(r=>{
+      // Sub-group divider when the group changes (e.g. "CON ROD JOURNAL DIAMETERS" → "CON ROD JOURNAL OUT-OF-ROUND")
+      if (r.group && r.group !== currentGroup) {
+        if (currentGroup !== null) {
+          // Spacer between sub-groups
+          mt.innerHTML+=`<tr><td colspan="6" style="height:8px;background:#F0F2F5;border:none;padding:0;"></td></tr>`;
+        }
+        mt.innerHTML+=`<tr><td colspan="6" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--navy);padding:.5rem .75rem;background:#E8ECF0;border-bottom:1px solid var(--border);">${r.group}</td></tr>`;
+        currentGroup = r.group;
+      }
       const v=document.getElementById('val-'+r.id);
       const s=document.getElementById('stat-'+r.id);
       const n=document.getElementById('note-'+r.id);
@@ -1996,7 +2005,7 @@ function openReport(){
       const cls=st==='PASS'?'r-pass':st==='FAIL'?'r-fail':'r-pend';
       mt.innerHTML+=`<tr><td style="font-size:10px;color:var(--gray);">${def.title}</td><td>${r.label}</td><td class="mono">${r.spec}</td><td class="mono">${v?v.value:'—'}</td><td class="${cls}">${st}</td><td style="font-size:10px;color:var(--gray);">${n?n.value:''}</td></tr>`;
     });
-    // Spacer row for visual breathing room
+    // Spacer row for visual breathing room between sections
     mt.innerHTML+=`<tr class="rpt-spacer-row"><td colspan="6" style="height:10px;background:#F3F4F6;border:none;padding:0;"></td></tr>`;
   });
   // Findings — grouped by section with header rows between them
